@@ -60,7 +60,10 @@ pipelines = {
     ]),
     "RandomForestClassifier": Pipeline([
         ("preprocessing", preprocesseur),
-        ("model", RandomForestClassifier(class_weight="balanced", random_state=42)),
+        ("model", RandomForestClassifier(
+            class_weight="balanced", 
+            random_state=42
+        )),
     ]),
 }
 
