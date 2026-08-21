@@ -14,6 +14,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+import matplotlib.pyplot as plt
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 )
@@ -129,6 +130,56 @@ for name, pipeline in pipelines.items():
             best_f1 = f1
             best_pipeline = pipeline
             best_model_name = name
+
+# --- Analyse de l'importance des variables ---
+if best_model_name == "RandomForestClassifier":
+    print("\nCalcul de l'importance des variables...")
+
+    # Recuperer les noms des colonnes apres le preprocessing
+    noms_colonnes = (
+        colonnes_numeriques
+        + list(
+            best_pipeline.named_steps["preprocessing"]
+            .named_transformers_["cat"]
+            .get_feature_names_out(colonnes_categorielles)
+        )
+    )
+
+    importances = best_pipeline.named_steps["model"].feature_importances_
+
+    # Trier par importance decroissante
+    indices_tries = importances.argsort()[::-1]
+    noms_tries = [noms_colonnes[i] for i in indices_tries]
+    valeurs_triees = importances[indices_tries]
+
+    # Affichage texte dans le terminal
+    print("Importance des variables (du plus au moins important) :")
+    for nom, valeur in zip(noms_tries, valeurs_triees):
+        print(f"  {nom} : {valeur:.4f}")
+
+    # Graphique
+    plt.figure(figsize=(10, 6))
+    plt.barh(noms_tries, valeurs_triees, color="#1F4E78")
+    plt.xlabel("Importance")
+    plt.title("Importance des variables - RandomForestClassifier")
+    plt.gca().invert_yaxis()
+    plt.tight_layout()
+
+    chemin_graphique = "feature_importance.png"
+    plt.savefig(chemin_graphique)
+    plt.close()
+    print(f"Graphique sauvegarde : {chemin_graphique}")
+
+    # Log du graphique dans MLflow
+    with mlflow.start_run(run_name=f"{best_model_name}_feature_importance"):
+        mlflow.log_artifact(chemin_graphique)
+        for nom, valeur in zip(noms_tries, valeurs_triees):
+            nom_propre = (
+                nom.replace("[", "").replace("]", "")
+                   .replace(" ", "_")
+            )
+            mlflow.log_metric(f"importance_{nom_propre}", valeur)            
+            
 
 # --- 7. Sauvegarde du meilleur pipeline complet ---
 print(f"\nMeilleur modèle : {best_model_name} (F1-score = {best_f1:.4f})")
