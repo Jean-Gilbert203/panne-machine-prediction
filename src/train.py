@@ -1,7 +1,6 @@
 """
 Script d'entraînement du modèle de prédiction de panne machine (maintenance prédictive).
-Compare LogisticRegression et RandomForestClassifier (encapsulés dans un Pipeline avec
-StandardScaler + OneHotEncoder), log tout dans MLflow, et sauvegarde le meilleur
+Compare LogisticRegression et RandomForestClassifier et sauvegarde le meilleur
 pipeline complet en model.pkl.
 """
 
@@ -9,7 +8,7 @@ import pickle
 import pandas as pd
 import mlflow
 import mlflow.sklearn
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
@@ -61,13 +60,15 @@ pipelines = {
     ]),
     "RandomForestClassifier": Pipeline([
         ("preprocessing", preprocesseur),
-        ("model", RandomForestClassifier(
-            n_estimators=100, 
-            max_depth=10, 
-            class_weight="balanced", 
-            random_state=42
-        )),
+        ("model", RandomForestClassifier(class_weight="balanced", random_state=42)),
     ]),
+}
+
+# Grille d'hyperparametres a tester uniquement pour RandomForest
+grille_random_forest = {
+    "model__n_estimators": [100, 200],
+    "model__max_depth": [5, 10, 15],
+    "model__min_samples_split": [2, 5],
 }
 
 best_pipeline = None
@@ -78,7 +79,19 @@ best_f1 = -1
 for name, pipeline in pipelines.items():
     with mlflow.start_run(run_name=name):
         print(f"\nEntraînement : {name}")
-        pipeline.fit(X_train, y_train)
+
+        if name == "RandomForestClassifier":
+            recherche = GridSearchCV(
+                pipeline, grille_random_forest,
+                scoring="f1", cv=3, n_jobs=-1
+            )
+            recherche.fit(X_train, y_train)
+            pipeline = recherche.best_estimator_
+            print(f"  Meilleurs hyperparametres trouves : {recherche.best_params_}")
+            mlflow.log_params(recherche.best_params_)
+        else:
+            pipeline.fit(X_train, y_train)
+
         predictions = pipeline.predict(X_test)
 
         acc = accuracy_score(y_test, predictions)
@@ -120,4 +133,4 @@ print(f"\nMeilleur modèle : {best_model_name} (F1-score = {best_f1:.4f})")
 with open("model.pkl", "wb") as f:
     pickle.dump(best_pipeline, f)
 
-print("Pipeline complet (preprocessing + modèle) sauvegardé dans model.pkl")
+print("Pipeline complet sauvegardé dans model.pkl")
