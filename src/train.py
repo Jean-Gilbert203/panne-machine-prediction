@@ -1,7 +1,6 @@
 """
 Script d'entraînement du modèle de prédiction de panne machine (maintenance prédictive).
-Compare LogisticRegression et RandomForestClassifier (encapsulés dans un Pipeline avec
-StandardScaler + OneHotEncoder), log tout dans MLflow, et sauvegarde le meilleur
+Compare LogisticRegression et RandomForestClassifier et sauvegarde le meilleur
 pipeline complet en model.pkl.
 """
 
@@ -9,12 +8,13 @@ import pickle
 import pandas as pd
 import mlflow
 import mlflow.sklearn
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+import matplotlib.pyplot as plt
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 )
@@ -62,12 +62,17 @@ pipelines = {
     "RandomForestClassifier": Pipeline([
         ("preprocessing", preprocesseur),
         ("model", RandomForestClassifier(
-            n_estimators=100, 
-            max_depth=10, 
             class_weight="balanced", 
             random_state=42
         )),
     ]),
+}
+
+# Grille d'hyperparametres a tester uniquement pour RandomForest
+grille_random_forest = {
+    "model__n_estimators": [100, 200],
+    "model__max_depth": [5, 10, 15],
+    "model__min_samples_split": [2, 5],
 }
 
 best_pipeline = None
@@ -78,7 +83,19 @@ best_f1 = -1
 for name, pipeline in pipelines.items():
     with mlflow.start_run(run_name=name):
         print(f"\nEntraînement : {name}")
-        pipeline.fit(X_train, y_train)
+
+        if name == "RandomForestClassifier":
+            recherche = GridSearchCV(
+                pipeline, grille_random_forest,
+                scoring="f1", cv=3, n_jobs=-1
+            )
+            recherche.fit(X_train, y_train)
+            pipeline = recherche.best_estimator_
+            print(f"  Meilleurs hyperparametres trouves : {recherche.best_params_}")
+            mlflow.log_params(recherche.best_params_)
+        else:
+            pipeline.fit(X_train, y_train)
+
         predictions = pipeline.predict(X_test)
 
         acc = accuracy_score(y_test, predictions)
@@ -114,10 +131,60 @@ for name, pipeline in pipelines.items():
             best_pipeline = pipeline
             best_model_name = name
 
+# --- Analyse de l'importance des variables ---
+if best_model_name == "RandomForestClassifier":
+    print("\nCalcul de l'importance des variables...")
+
+    # Recuperer les noms des colonnes apres le preprocessing
+    noms_colonnes = (
+        colonnes_numeriques
+        + list(
+            best_pipeline.named_steps["preprocessing"]
+            .named_transformers_["cat"]
+            .get_feature_names_out(colonnes_categorielles)
+        )
+    )
+
+    importances = best_pipeline.named_steps["model"].feature_importances_
+
+    # Trier par importance decroissante
+    indices_tries = importances.argsort()[::-1]
+    noms_tries = [noms_colonnes[i] for i in indices_tries]
+    valeurs_triees = importances[indices_tries]
+
+    # Affichage texte dans le terminal
+    print("Importance des variables (du plus au moins important) :")
+    for nom, valeur in zip(noms_tries, valeurs_triees):
+        print(f"  {nom} : {valeur:.4f}")
+
+    # Graphique
+    plt.figure(figsize=(10, 6))
+    plt.barh(noms_tries, valeurs_triees, color="#1F4E78")
+    plt.xlabel("Importance")
+    plt.title("Importance des variables - RandomForestClassifier")
+    plt.gca().invert_yaxis()
+    plt.tight_layout()
+
+    chemin_graphique = "feature_importance.png"
+    plt.savefig(chemin_graphique)
+    plt.close()
+    print(f"Graphique sauvegarde : {chemin_graphique}")
+
+    # Log du graphique dans MLflow
+    with mlflow.start_run(run_name=f"{best_model_name}_feature_importance"):
+        mlflow.log_artifact(chemin_graphique)
+        for nom, valeur in zip(noms_tries, valeurs_triees):
+            nom_propre = (
+                nom.replace("[", "").replace("]", "")
+                   .replace(" ", "_")
+            )
+            mlflow.log_metric(f"importance_{nom_propre}", valeur)            
+            
+
 # --- 7. Sauvegarde du meilleur pipeline complet ---
 print(f"\nMeilleur modèle : {best_model_name} (F1-score = {best_f1:.4f})")
 
 with open("model.pkl", "wb") as f:
     pickle.dump(best_pipeline, f)
 
-print("Pipeline complet (preprocessing + modèle) sauvegardé dans model.pkl")
+print("Pipeline complet sauvegardé dans model.pkl")
