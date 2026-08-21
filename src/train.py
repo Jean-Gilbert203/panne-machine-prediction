@@ -107,9 +107,6 @@ for name, pipeline in pipelines.items():
         mlflow.log_param("model_type", name)
         mlflow.log_param("preprocessing", "StandardScaler + OneHotEncoder")
         mlflow.log_param("class_weight", "balanced")
-        if name == "RandomForestClassifier":
-            mlflow.log_param("n_estimators", 100)
-            mlflow.log_param("max_depth", 10)
 
         mlflow.log_metric("accuracy", acc)
         mlflow.log_metric("precision", prec)
