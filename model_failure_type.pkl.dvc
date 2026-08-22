@@ -1,0 +1,5 @@
+outs:
+- md5: 70cc2953cfe90468adf1266f7df7fdcb
+  size: 1383490
+  hash: md5
+  path: model_failure_type.pkl
