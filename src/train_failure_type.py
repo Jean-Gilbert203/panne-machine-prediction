@@ -32,7 +32,7 @@ X = pannes[colonnes_numeriques + colonnes_categorielles]
 y = pannes["Failure Type"]
 
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42
+    X, y, test_size=0.3, random_state=42, stratify=y
 )
 
 preprocesseur = ColumnTransformer([
@@ -48,5 +48,5 @@ pipeline = Pipeline([
 pipeline.fit(X_train, y_train)
 predictions = pipeline.predict(X_test)
 
-print("\nApres ajout de class_weight='balanced' :")
+print("\nApres ajustement test_size (0.3) et stratify :")
 print(classification_report(y_test, predictions, zero_division=0))
