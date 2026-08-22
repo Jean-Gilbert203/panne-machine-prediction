@@ -42,11 +42,11 @@ preprocesseur = ColumnTransformer([
 
 pipeline = Pipeline([
     ("preprocessing", preprocesseur),
-    ("model", RandomForestClassifier(random_state=42)),
+    ("model", RandomForestClassifier(random_state=42, class_weight="balanced")),
 ])
 
 pipeline.fit(X_train, y_train)
 predictions = pipeline.predict(X_test)
 
-print("\nPremier essai :")
+print("\nApres ajout de class_weight='balanced' :")
 print(classification_report(y_test, predictions, zero_division=0))
