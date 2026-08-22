@@ -5,3 +5,4 @@ mlruns/
 mlflow.db
 data/raw/*.csv
 model.pkl
+/model_failure_type.pkl
